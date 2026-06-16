@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Anachronism: The Dungeon</title>
+    <style>
+        body { background: #1a1a1a; color: #e0e0e0; font-family: sans-serif; text-align: center; padding-top: 50px; }
+        .box { border: 2px solid #cd7f32; padding: 20px; display: inline-block; background: #2a2a2a; border-radius: 8px; }
+        button { background: #cd7f32; color: white; border: none; padding: 10px 20px; font-size: 16px; cursor: pointer; border-radius: 4px; }
+        button:hover { background: #b86b20; }
+    </style>
+</head>
+<body>
+
+    <h1>Anachronism: The Dungeon</h1>
+    <div class="box">
+        <p>Welcome to the Temporal Rift, Hero.</p>
+        <button onclick="alert('You stepped forward and revealed a new tile!')">Explore Next Tile</button>
+    </div>
+
+</body>
+</html>
