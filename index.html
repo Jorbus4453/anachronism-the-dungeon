@@ -4,19 +4,118 @@
     <meta charset="UTF-8">
     <title>Anachronism: The Dungeon</title>
     <style>
-        body { background: #1a1a1a; color: #e0e0e0; font-family: sans-serif; text-align: center; padding-top: 50px; }
-        .box { border: 2px solid #cd7f32; padding: 20px; display: inline-block; background: #2a2a2a; border-radius: 8px; }
-        button { background: #cd7f32; color: white; border: none; padding: 10px 20px; font-size: 16px; cursor: pointer; border-radius: 4px; }
+        body { background: #141419; color: #e0e0e0; font-family: 'Georgia', serif; text-align: center; margin: 0; padding: 20px; }
+        h1 { color: #cd7f32; margin-bottom: 5px; }
+        .subtitle { font-style: italic; color: #8a8a9a; margin-bottom: 30px; }
+        
+        .game-container { display: flex; justify-content: center; gap: 30px; flex-wrap: wrap; margin-top: 20px; }
+        .panel { background: #1e1e24; border: 2px solid #3a3a42; border-radius: 8px; padding: 20px; width: 320px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .panel.active-phase { border-color: #cd7f32; }
+        
+        .stat-val { font-size: 24px; font-weight: bold; color: #cd7f32; margin: 10px 0; }
+        .tile-display { background: #111; border: 1px dashed #555; height: 100px; display: flex; align-items: center; justify-content: center; font-size: 18px; margin: 15px 0; border-radius: 4px; padding: 10px; }
+        .boss-alert { color: #ff4d4d; font-weight: bold; display: none; }
+        
+        button { background: #cd7f32; color: white; border: none; padding: 12px 24px; font-size: 16px; font-family: sans-serif; font-weight: bold; cursor: pointer; border-radius: 4px; width: 100%; transition: background 0.2s; }
         button:hover { background: #b86b20; }
+        button:disabled { background: #444; color: #888; cursor: not-allowed; }
     </style>
 </head>
 <body>
 
-    <h1>Anachronism: The Dungeon</h1>
-    <div class="box">
-        <p>Welcome to the Temporal Rift, Hero.</p>
-        <button onclick="alert('You stepped forward and revealed a new tile!')">Explore Next Tile</button>
+    <h1>ANACHRONISM: THE DUNGEON</h1>
+    <div class="subtitle">A Shifting Labyrinth of Fractured Time</div>
+
+    <div class="game-container">
+        <div class="panel" id="hero-panel">
+            <h2>Dungeon Exploration</h2>
+            <hr style="border-color: #3a3a42;">
+            <p>Tiles Remaining in Deck:</p>
+            <div class="stat-val" id="deck-count">40</div>
+            
+            <button id="explore-btn" onclick="exploreNextTile()">Explore Next Tile</button>
+            
+            <div class="tile-display" id="current-tile">Step into the dark...</div>
+        </div>
+
+        <div class="panel" id="overlord-panel">
+            <h2>The Overlord</h2>
+            <hr style="border-color: #3a3a42;">
+            <p>Current Status:</p>
+            <div class="stat-val" id="overlord-status" style="color: #8a8a9a;">Lurking in Shadows</div>
+            
+            <p>Paradox Energy (PE):</p>
+            <div class="stat-val" id="pe-count" style="color: #4da6ff;">0</div>
+            
+            <p>Overlord Health Pool:</p>
+            <div class="stat-val" id="hp-count" style="color: #ff4d4d;">?? / ??</div>
+            
+            <div class="boss-alert" id="boss-alert-text">⚠️ PHASE 2: CONFRONTATION!</div>
+        </div>
     </div>
+
+    <script>
+        let phase = 1; 
+        let revealedTiles = 0;
+        let tileDeck = [];
+        let paradoxEnergy = 0;
+
+        // 1. Shuffling Logic (Creates 39 normal rooms and 1 Boss Room)
+        function initGame() {
+            tileDeck = [];
+            for (let i = 1; i <= 39; i++) {
+                tileDeck.push("Dungeon Corridor " + i);
+            }
+            tileDeck.push("Chrono-Sanctum Gate"); // The hidden boss room
+
+            // Shuffle the array randomly
+            tileDeck.sort(() => Math.random() - 0.5);
+            
+            // Sync numbers to the screen
+            document.getElementById("deck-count").innerText = tileDeck.length;
+        }
+
+        // 2. Button Action: Drawing a tile
+        function exploreNextTile() {
+            if (phase !== 1 || tileDeck.length === 0) return;
+
+            let drawnTile = tileDeck.pop();
+            revealedTiles++;
+            paradoxEnergy++; // Overlord gains 1 PE per tile explored
+
+            // Update UI
+            document.getElementById("deck-count").innerText = tileDeck.length;
+            document.getElementById("current-tile").innerText = "Revealed: " + drawnTile;
+            document.getElementById("pe-count").innerText = paradoxEnergy;
+
+            // Check if the tile drawn is the Boss Room
+            if (drawnTile === "Chrono-Sanctum Gate") {
+                triggerPhase2();
+            }
+        }
+
+        // 3. The Math Transition: Locking the Boss HP
+        function triggerPhase2() {
+            phase = 2;
+            
+            // Our design math: 15 Base HP + 1 HP per revealed tile
+            let maxHP = 15 + revealedTiles;
+            
+            // Lock UI changes for Phase 2
+            document.getElementById("explore-btn").disabled = true;
+            document.getElementById("current-tile").style.borderColor = "#ff4d4d";
+            document.getElementById("current-tile").style.color = "#ff4d4d";
+            
+            document.getElementById("overlord-status").innerText = "MANIFESTED";
+            document.getElementById("overlord-status").style.color = "#ff4d4d";
+            document.getElementById("hp-count").innerText = maxHP + " / " + maxHP;
+            document.getElementById("boss-alert-text").style.display = "block";
+            document.getElementById("overlord-panel").classList.add("active-phase");
+        }
+
+        // Run the deck setup immediately when page loads
+        initGame();
+    </script>
 
 </body>
 </html>
