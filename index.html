@@ -14,27 +14,35 @@
         .panel.hero-phase { border-color: #4da6ff; }
         
         .stat-val { font-size: 24px; font-weight: bold; color: #cd7f32; margin: 10px 0; }
+        .turn-banner { background: #2c2c35; border: 1px solid #444; padding: 10px; font-weight: bold; font-family: sans-serif; margin-bottom: 15px; border-radius: 4px; display: none; }
         .tile-display { background: #111; border: 1px dashed #555; height: 80px; display: flex; align-items: center; justify-content: center; font-size: 18px; margin: 15px 0; border-radius: 4px; padding: 10px; }
         .boss-alert { color: #ff4d4d; font-weight: bold; display: none; margin-top: 10px; }
         
         /* Card Hand Styles */
-        .hand-container { display: flex; justify-content: center; gap: 10px; margin-top: 15px; min-height: 90px; }
+        .hand-container { display: flex; justify-content: center; gap: 10px; margin-top: 15px; min-height: 90px; flex-wrap: wrap; }
         .loot-card { background: #2c3e50; border: 2px solid #34495e; border-radius: 6px; width: 55px; height: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif; cursor: pointer; transition: transform 0.2s, background 0.2s; }
+        .loot-card.disabled-card { opacity: 0.6; cursor: not-allowed; transform: none !important; border-color: #34495e !important; }
         .loot-card:hover { transform: translateY(-5px); background: #34495e; border-color: #cd7f32; }
         .loot-card .dmg-num { font-size: 20px; font-weight: bold; color: #fff; }
         .loot-card .label { font-size: 10px; color: #bdc3c7; }
+        
+        /* Overlord Card Styles */
+        .boss-card { background: #5c1d1d; border: 2px solid #782424; color: #fff; cursor: default; }
+        .boss-card:hover { transform: none; background: #5c1d1d; border-color: #782424; }
         
         button { background: #cd7f32; color: white; border: none; padding: 12px 24px; font-size: 16px; font-family: sans-serif; font-weight: bold; cursor: pointer; border-radius: 4px; width: 100%; transition: background 0.2s; margin-top: 10px; }
         button:hover { background: #b86b20; }
         button:disabled { background: #444; color: #888; cursor: not-allowed; }
         
-        .log-box { font-family: sans-serif; font-size: 13px; color: #a9a9b3; background: #111; border: 1px solid #222; padding: 8px; border-radius: 4px; margin-top: 15px; text-align: left; height: 60px; overflow-y: auto; }
+        .log-box { font-family: sans-serif; font-size: 13px; color: #a9a9b3; background: #111; border: 1px solid #222; padding: 8px; border-radius: 4px; margin-top: 15px; text-align: left; height: 80px; overflow-y: auto; }
     </style>
 </head>
 <body>
 
     <h1>ANACHRONISM: THE DUNGEON</h1>
     <div class="subtitle">A Shifting Labyrinth of Fractured Time</div>
+
+    <div id="turn-indicator" class="turn-banner">HERO TURN</div>
 
     <div class="game-container">
         <div class="panel" id="hero-panel">
@@ -54,11 +62,10 @@
                 <hr style="border-color: #3a3a42;">
                 <p>Party Health Pool:</p>
                 <div class="stat-val" id="party-hp" style="color: #4da6ff;">20 / 20</div>
-                <p style="font-size: 13px; margin: 0; color: #8a8a9a;">Your Loot Cards (Click to play in Phase 2):</p>
+                <p style="font-size: 13px; margin: 0; color: #8a8a9a;" id="hand-label">Your Loot Cards:</p>
             </div>
             
-            <div class="hand-container" id="hero-hand">
-                </div>
+            <div class="hand-container" id="hero-hand"></div>
             
             <div class="log-box" id="combat-log">System: Draw tiles to find the Overlord and gather high damage loot!</div>
         </div>
@@ -76,12 +83,15 @@
                 <p>Overlord Health:</p>
                 <div class="stat-val" id="hp-count" style="color: #ff4d4d;">?? / ??</div>
             </div>
+            
+            <div class="hand-container" id="boss-intent-hand" style="min-height: 40px;"></div>
             <div class="boss-alert" id="boss-alert-text">⚠️ CONFRONTATION ENGAGED!</div>
         </div>
     </div>
 
     <script>
         let phase = 1; 
+        let currentTurn = "Hero"; // "Hero" or "Overlord"
         let revealedTiles = 0;
         let tileDeck = [];
         let paradoxEnergy = 0;
@@ -89,6 +99,15 @@
         // Overlord Combat Stats
         let overlordMaxHP = 0;
         let overlordCurrentHP = 0;
+        let bossHand = []; // Holds current cards the boss drew
+
+        // Fixed Boss Deck definition [PE Cost, Fixed Damage, Card Name]
+        const bossDeckLibrary = [
+            { cost: 2, dmg: 2, name: "Temporal Tear" },
+            { cost: 3, dmg: 2, name: "Decay Touch" },
+            { cost: 4, dmg: 3, name: "Entropy Wave" },
+            { cost: 1, dmg: 1, name: "Paradox Spike" }
+        ];
 
         // Hero Combat Stats
         let partyMaxHP = 20;
@@ -101,26 +120,24 @@
             tileDeck.push("Chrono-Sanctum Gate");
             tileDeck.sort(() => Math.random() - 0.5);
             
-            // Give heroes a starter hand of 4 basic low-tier loot cards
             heroHand = [0, 1, 1, 2];
-            
             renderHand();
             document.getElementById("deck-count").innerText = tileDeck.length;
         }
 
         function renderHand() {
             const handView = document.getElementById("hero-hand");
-            handView.innerHTML = ""; // Clear current display
+            handView.innerHTML = ""; 
             
             heroHand.forEach((dmgValue, index) => {
                 let card = document.createElement("div");
                 card.className = "loot-card";
-                // Only allow clicking cards if we are fighting the boss
-                if (phase === 2) {
+                
+                // Disable clicking if it's not the Hero's turn during combat
+                if (phase === 2 && currentTurn === "Hero" && partyCurrentHP > 0 && overlordCurrentHP > 0) {
                     card.setAttribute("onclick", `playLootCard(${index})`);
                 } else {
-                    card.style.opacity = "0.7";
-                    card.style.cursor = "not-allowed";
+                    card.classList.add("disabled-card");
                 }
                 
                 card.innerHTML = `
@@ -129,6 +146,21 @@
                     <div class="label">DMG</div>
                 `;
                 handView.appendChild(card);
+            });
+        }
+
+        function renderBossHand() {
+            const bossView = document.getElementById("boss-intent-hand");
+            bossView.innerHTML = "";
+            bossHand.forEach(card => {
+                let cNode = document.createElement("div");
+                cNode.className = "loot-card boss-card";
+                cNode.innerHTML = `
+                    <div class="label">COST: ${card.cost}</div>
+                    <div class="dmg-num">${card.dmg}</div>
+                    <div class="label">PE DMG</div>
+                `;
+                bossView.appendChild(cNode);
             });
         }
 
@@ -143,11 +175,10 @@
             document.getElementById("current-tile").innerText = "Revealed: " + drawnTile;
             document.getElementById("pe-count").innerText = paradoxEnergy;
 
-            // Mechanics: As heroes explore, they occasionally upgrade cards to higher fixed tiers (0-4 DMG)
             if (revealedTiles % 3 === 0 && phase === 1) {
-                let newDmg = Math.floor(Math.random() * 3) + 2; // Rolls a 2, 3, or 4 DMG card
+                let newDmg = Math.floor(Math.random() * 3) + 2; 
                 heroHand.push(newDmg);
-                if(heroHand.length > 5) heroHand.shift(); // Keep hand capped at 5 cards
+                if(heroHand.length > 5) heroHand.shift(); 
                 logMessage(`Found high-tier loot! Added a ${newDmg} DMG card.`);
                 renderHand();
             }
@@ -169,46 +200,137 @@
             document.getElementById("overlord-status").innerText = "MANIFESTED";
             document.getElementById("overlord-status").style.color = "#ff4d4d";
             document.getElementById("hp-count").innerText = overlordCurrentHP + " / " + overlordMaxHP;
+            
             document.getElementById("boss-alert-text").style.display = "block";
             document.getElementById("overlord-panel").classList.add("active-phase");
             document.getElementById("combat-panel").classList.add("hero-phase");
             
-            logMessage("⚔️ The Boss Room is breached! Strike using your loot cards!");
-            renderHand(); // Enable cards for combat
+            // Show turn banner
+            const banner = document.getElementById("turn-indicator");
+            banner.style.display = "block";
+            banner.style.backgroundColor = "#1b3a4b";
+            banner.innerText = "HERO TURN";
+
+            logMessage("⚔️ The Chrono-Sanctum is open! Play a loot card to strike.");
+            renderHand(); 
         }
 
-        // Combat Interaction: Clicking a loot card
+        // Hero Action Execution
         function playLootCard(index) {
-            if (phase !== 2 || overlordCurrentHP <= 0) return;
+            if (phase !== 2 || currentTurn !== "Hero" || overlordCurrentHP <= 0) return;
             
             let dmg = heroHand[index];
             overlordCurrentHP -= dmg;
             if (overlordCurrentHP < 0) overlordCurrentHP = 0;
             
-            logMessage(`Hero played a card dealing ${dmg} DMG to the Overlord!`);
+            logMessage(`Hero deals ${dmg} DMG.`);
             document.getElementById("hp-count").innerText = overlordCurrentHP + " / " + overlordMaxHP;
             
-            // Remove the used card from hand
             heroHand.splice(index, 1);
-            
-            // Game Over Check
+            if (heroHand.length === 0) heroHand.push(1); // Anti-softlock backup strike
+
             if (overlordCurrentHP === 0) {
-                logMessage("🏆 VICTORY! The Overlord has been shattered across the timelines!");
-                document.getElementById("overlord-status").innerText = "DEFEATED";
-                document.getElementById("overlord-status").style.color = "#4da6ff";
-            } else {
-                // If the hand empties out completely, give them a backup basic strike
-                if (heroHand.length === 0) {
-                    heroHand.push(1);
-                }
+                endGame(true);
+                return;
             }
-            
+
+            // Switch to Overlord Turn after a short mechanical pause
+            currentTurn = "Overlord";
+            updateTurnBanner();
             renderHand();
+            setTimeout(executeOverlordTurn, 1200);
+        }
+
+        // Overlord Action execution (Automated AI Boss Deck processing)
+        function executeOverlordTurn() {
+            if (overlordCurrentHP <= 0 || partyCurrentHP <= 0) return;
+
+            // 1. Passive Generation: Overlord gains a flat +2 PE at start of their turn
+            paradoxEnergy += 2;
+            document.getElementById("pe-count").innerText = paradoxEnergy;
+
+            // 2. Draw a card from the Boss Deck
+            let randomCard = bossDeckLibrary[Math.floor(Math.random() * bossDeckLibrary.length)];
+            bossHand.push(randomCard);
+            renderBossHand();
+
+            logMessage(`Overlord gathered power (+2 PE) and drew ${randomCard.name}.`);
+
+            // 3. Play Check: Scan hand for the highest impact card the Overlord can afford
+            setTimeout(() => {
+                let playableCardIndex = -1;
+                let highestCost = -1;
+
+                for(let i = 0; i < bossHand.length; i++) {
+                    if (bossHand[i].cost <= paradoxEnergy && bossHand[i].cost > highestCost) {
+                        highestCost = bossHand[i].cost;
+                        playableCardIndex = i;
+                    }
+                }
+
+                // If affordable, cast it!
+                if (playableCardIndex !== -1) {
+                    let cardToPlay = bossHand[playableCardIndex];
+                    paradoxEnergy -= cardToPlay.cost;
+                    partyCurrentHP -= cardToPlay.dmg;
+                    if (partyCurrentHP < 0) partyCurrentHP = 0;
+
+                    document.getElementById("pe-count").innerText = paradoxEnergy;
+                    document.getElementById("party-hp").innerText = partyCurrentHP + " / " + partyMaxHP;
+                    logMessage(`💥 Overlord casts ${cardToPlay.name} costing ${cardToPlay.cost} PE! Deals ${cardToPlay.dmg} fixed DMG to the party.`);
+
+                    bossHand.splice(playableCardIndex, 1);
+                    renderBossHand();
+                } else {
+                    logMessage("The Overlord bides their time, conserving energy for a larger rift.");
+                }
+
+                // Check Game Over
+                if (partyCurrentHP === 0) {
+                    endGame(false);
+                    return;
+                }
+
+                // Pass Turn back to Hero
+                currentTurn = "Hero";
+                updateTurnBanner();
+                renderHand();
+            }, 1200);
+        }
+
+        function updateTurnBanner() {
+            const banner = document.getElementById("turn-indicator");
+            if (currentTurn === "Hero") {
+                banner.style.backgroundColor = "#1b3a4b";
+                banner.innerText = "HERO TURN";
+            } else {
+                banner.style.backgroundColor = "#4a1515";
+                banner.innerText = "OVERLORD TURN";
+            }
+        }
+
+        function endGame(heroesWon) {
+            phase = 3;
+            renderHand();
+            const banner = document.getElementById("turn-indicator");
+            if (heroesWon) {
+                banner.style.backgroundColor = "#27ae60";
+                banner.innerText = "HEROES VICTORIOUS!";
+                logMessage("🏆 VICTORY! The Overlord's paradox collapses. The timeline is saved!");
+                document.getElementById("overlord-status").innerText = "SHATTERED";
+                document.getElementById("overlord-status").style.color = "#27ae60";
+            } else {
+                banner.style.backgroundColor = "#c0392b";
+                banner.innerText = "OVERLORD VICTORIOUS";
+                logMessage("💀 DEFEAT... The party was consumed by the anomalies. Reality dissolves.");
+                document.getElementById("overlord-status").innerText = "SUPREME";
+                document.getElementById("overlord-status").style.color = "#c0392b";
+            }
         }
 
         function logMessage(text) {
             const log = document.getElementById("combat-log");
-            log.innerText = text;
+            log.innerHTML = text;
         }
 
         initGame();
